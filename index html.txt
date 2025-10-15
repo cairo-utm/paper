@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paper Template Converter - CAIRO UTM</title>
+    <!-- Load Tailwind CSS for easy and responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load marked.js to convert Markdown to HTML -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Load PptxGenJS for PowerPoint generation -->
+    
+    <!-- Libraries for reading file uploads -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        // Required for pdf.js to work
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f3f4f6; /* Light grey background */
+            padding: 20px;
+        }
+        .container {
+            max-width: 90%;
+            width: 800px; /* Wider container for document formatting */
+            box-sizing: border-box;
+            position: relative;
+        }
+        input[type="text"], textarea, input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            margin-bottom: 15px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        /* Custom styling for file input button */
+        input[type="file"] {
+            padding: 0;
+        }
+        input[type="file"]::file-selector-button {
+            background-color: #e5e7eb;
+            color: #374151;
+            border: none;
+            padding: 10px 15px;
+            border-right: 1px solid #d1d5db;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: #d1d5db;
+        }
+
+        #formattedOutput {
+            width: 100%;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            margin-bottom: 15px;
+            font-size: 1rem;
+            min-height: 300px;
+            background-color: #f9fafb;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+        /* Styling for markdown generated elements */
+        #formattedOutput h1 {
+            font-size: 1.875rem; /* text-3xl */
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        #formattedOutput h2 {
+            font-size: 1.5rem; /* text-2xl */
+            font-weight: bold;
+            margin-top: 1.5rem;
+            margin-bottom: 0.8rem;
+            color: #1f2937;
+        }
+         #formattedOutput h3 {
+            font-size: 1.25rem; /* text-xl */
+            font-weight: bold;
+            margin-top: 1.2rem;
+            margin-bottom: 0.6rem;
+            color: #1f2937;
+        }
+        #formattedOutput p {
+            margin-bottom: 1em;
+            color: #374151;
+        }
+        #formattedOutput ul, #formattedOutput ol {
+            padding-left: 2em; /* Indent lists */
+            margin-bottom: 1em;
+            color: #374151;
+        }
+        #formattedOutput ul { list-style-type: disc; }
+        #formattedOutput ol { list-style-type: decimal; }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #4b5563;
+        }
+        .action-button {
+            background-color: #10b981; /* Green */
+            font-weight: 600;
+            padding: 10px 20px;
+            border-radius: 9999px; /* Rounded-full */
+            color: white;
+            transition: background-color 0.3s ease-in-out;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+        .action-button:hover {
+            background-color: #059669; /* Darker green */
+        }
+        .primary-button {
+            background-color: #4f46e5; /* Indigo */
+        }
+        .primary-button:hover {
+            background-color: #4338ca; /* Darker indigo */
+        }
+        .pptx-button {
+            background-color: #d94625; /* PowerPoint Orange */
+        }
+        .pptx-button:hover {
+            background-color: #b43419;
+        }
+        .action-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Modal styling */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); display: flex;
+            justify-content: center; align-items: center; z-index: 9999;
+            overflow-y: auto; padding: 20px;
+        }
+        .modal-content {
+            background-color: #fff; padding: 30px; border-radius: 12px;
+            width: 90%; max-width: 800px; max-height: 90vh;
+            overflow-y: auto; position: relative; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        .modal-content h1, .modal-content h2 { font-weight: bold; margin-top: 1em; margin-bottom: 0.5em; color: #1f2937; }
+        .modal-content h1 { font-size: 1.75rem; }
+        .modal-content h2 { font-size: 1.35rem; }
+        .modal-content p, .modal-content ul, .modal-content ol { margin-bottom: 1em; color: #374151; }
+        .modal-content ul, .modal-content ol { list-style-type: disc; margin-left: 20px; }
+        .modal-content ol { list-style-type: decimal; }
+        .modal-close-button {
+            position: absolute; top: 15px; right: 15px; background: none; border: none;
+            font-size: 1.5rem; cursor: pointer; color: #4b5563; transition: color 0.2s;
+        }
+        .modal-close-button:hover { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container bg-white p-8 rounded-xl shadow-lg flex flex-col items-center">
+        <!-- User Manual Button -->
+        <button id="userManualBtn" class="absolute top-4 right-4 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-full text-sm flex items-center space-x-2 transition duration-300">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                 <path fill-rule="evenodd" d="M12 1.5a.75.75 0 01.75.75V4.5a.75.75 0 01-1.5 0V2.25A.75.75 0 0112 1.5zM5.636 4.136a.75.75 0 011.06 0l1.592 1.591a.75.75 0 01-1.061 1.06l-1.591-1.59a.75.75 0 010-1.061zm12.728 0a.75.75 0 010 1.06l-1.591 1.59a.75.75 0 01-1.06-1.061l1.59-1.591a.75.75 0 011.06 0zM12 7.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9zM3.75 12a.75.75 0 01.75-.75h2.25a.75.75 0 010 1.5H4.5a.75.75 0 01-.75-.75zm15.75 0a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5h2.25a.75.75 0 01.75-.75zM7.228 16.772a.75.75 0 011.06 0l1.591-1.59a.75.75 0 011.06 1.061l-1.59 1.591a.75.75 0 01-1.061-1.06zm9.544 0a.75.75 0 010 1.06l-1.59 1.591a.75.75 0 11-1.061-1.06l1.59-1.59a.75.75 0 011.06 0zM12 22.5a.75.75 0 01-.75-.75v-2.25a.75.75 0 011.5 0v2.25a.75.75 0 01-.75-.75z" clip-rule="evenodd" />
+            </svg>
+            <span>User Manual</span>
+        </button>
+
+        <!-- CAIRO UTM Logo -->
+        <img src="logo.png" alt="CAIRO UTM Logo" class="mb-6 w-48 h-auto object-contain" onerror="this.onerror=null;this.src='https://placehold.co/192x78/E0E7FF/374151?text=Logo+Tidak+Dapat+Dimuatkan';">
+        <h1 class="text-3xl font-bold mb-6 text-gray-800 text-center">Aplikasi Suara ke Teks Minit Mesyuarat</h1>
+        
+        <h1 class="text-3xl font-bold mb-6 text-gray-800 text-center">Paper Template Converter</h1>
+        
+        <!-- Main Content Input -->
+        <div class="w-full mb-6">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">1. Load Source Content</h2>
+            
+            <!-- File Upload Section -->
+            <label for="fileUpload">Upload a document (.txt, .docx, .pdf, .rtf):</label>
+            <input type="file" id="fileUpload" accept=".txt,.doc,.docx,.pdf,.rtf">
+
+            <!-- OR Separator -->
+            <div class="my-4 flex items-center w-full">
+                <div class="flex-grow border-t border-gray-300"></div>
+                <span class="flex-shrink mx-4 text-gray-500 font-semibold">OR</span>
+                <div class="flex-grow border-t border-gray-300"></div>
+            </div>
+
+            <label for="sourceContent">Paste the entire content of your report, thesis, or article here:</label>
+            <textarea id="sourceContent" rows="10" placeholder="Paste your text here or upload a file above. Title and author details will be extracted automatically."></textarea>
+            
+            <button id="formatBtn" class="mt-4 w-full action-button primary-button py-3 px-6 text-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+                    <path d="M12.378 1.602a.75.75 0 00-.756 0L3 6.632l9 5.25 9-5.25-8.622-5.03zM21.75 7.93l-9 5.25v9l8.628-5.032a.75.75 0 00.372-.648V7.93zM11.25 22.18v-9l-9-5.25v8.57a.75.75 0 00.372.648l8.628 5.032z" />
+                </svg>
+                <span>Format Document</span>
+                 <div id="loadingSpinner" class="loading-spinner hidden ml-2"></div>
+            </button>
+        </div>
+
+        <!-- Output Display -->
+        <div class="mt-8 w-full">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">2. Formatted Output</h2>
+            <label>Preview of the formatted document:</label>
+            <div id="formattedOutput">
+                Your formatted document will appear here...
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 mt-4 w-full justify-center flex-wrap">
+                <button id="copyBtn" class="action-button w-full md:w-auto" disabled>
+                    <span>Copy to Clipboard</span>
+                </button>
+                <button id="downloadDocBtn" class="action-button w-full md:w-auto" disabled>
+                    <span>Download (.doc)</span>
+                </button>
+                 <button id="downloadRtfBtn" class="action-button w-full md:w-auto" disabled>
+                    <span>Download (.rtf)</span>
+                </button>
+                
+            </div>
+        </div>
+
+        <!-- Hidden Document Details for auto-population -->
+        <div class="w-full mb-6 hidden" id="docDetailsContainer">
+            <h2 class="text-2xl font-semibold mb-4 text-gray-700">Document Details</h2>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div>
+                    <label for="docTitle">Title:</label>
+                    <input type="text" id="docTitle" placeholder="e.g., The Impact of AI on Modern Education">
+                </div>
+                <div>
+                    <label for="docAuthors">Author(s) & Affiliation:</label>
+                    <input type="text" id="docAuthors" placeholder="e.g., John Doe, Jane Smith, Universiti Teknologi Malaysia">
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Message area for feedback or errors -->
+        <div id="messageBox" class="mt-4 text-sm text-red-600 text-center hidden"></div>
+
+        <!-- Copyright & Contact -->
+        <div class="mt-6 text-center text-xs text-gray-500">
+            <p>&copy; 2025 CAIRO UTM. All Rights Reserved.</p>
+            <p class="mt-1">
+                Website: <a href="https://research.utm.my/cairo" target="_blank" class="text-indigo-600 hover:underline">https://research.utm.my/cairo</a> | 
+                Email: <a href="mailto:cairo@utm.my" class="text-indigo-600 hover:underline">cairo@utm.my</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Modal for User Manual -->
+    <div id="userManualModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <button id="closeModalBtn" class="modal-close-button">&times;</button>
+            <div id="userManualContent" class="prose max-w-none">
+                <!-- README content will be loaded here by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        window.onload = function() {
+            // DOM element references
+            const docTitleInput = document.getElementById('docTitle');
+            const docAuthorsInput = document.getElementById('docAuthors');
+            const sourceContentInput = document.getElementById('sourceContent');
+            const fileUploadInput = document.getElementById('fileUpload');
+            const formatBtn = document.getElementById('formatBtn');
+            const formattedOutputDiv = document.getElementById('formattedOutput');
+            const copyBtn = document.getElementById('copyBtn');
+            const downloadDocBtn = document.getElementById('downloadDocBtn');
+            const downloadRtfBtn = document.getElementById('downloadRtfBtn');
+            const downloadPptxBtn = document.getElementById('downloadPptxBtn');
+            const pptxBtnText = document.getElementById('pptxBtnText');
+            const pptxLoadingSpinner = document.getElementById('pptxLoadingSpinner');
+            const messageBox = document.getElementById('messageBox');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+
+            // Modal elements
+            const userManualBtn = document.getElementById('userManualBtn');
+            const userManualModal = document.getElementById('userManualModal');
+            const closeModalBtn = document.getElementById('closeModalBtn');
+            const userManualContent = document.getElementById('userManualContent');
+
+            // Data variables
+            let aiGeneratedMarkdown = '';
+            
+            const readmeContentMarkdown = `
+# README: Paper Template Converter
+
+Welcome to the Paper Template Converter! This application is a powerful tool to convert any document (thesis, report, article) into a professionally formatted **conference proceeding paper** based on the SPLNPROC 1703 template.
+
+---
+
+## ✨ Key Features
+
+* **Conference Paper Formatting:** Strictly reformats your content into the SPLNPROC 1703 template, ensuring it meets proceeding standards.
+* **Intelligent Summarization:** Condenses lengthy documents into a concise 4-6 page paper, focusing on core arguments and findings.
+* **Paragraph-focused Writing:** Generates well-structured paragraphs, avoiding excessive bullet points for a more professional tone.
+* **Logical Figure Placement:** Intelligently inserts figure placeholders (e.g., \`<INSERT FIGURE 1 HERE>\`) within relevant sections like *Results & Discussion*.
+* **Presentation-Ready Slides:** Creates a complete and logical slide deck for your conference presentation, focusing on key talking points for each section of your paper.
+
+---
+
+## 🚀 How to Use
+
+1.  **Load Your Document:** Upload a file (.txt, .docx, .pdf) or paste the full text into the text area. The application will automatically attempt to extract the title and author details.
+2.  **Generate Paper:** Click **"Format Document"**. The AI will perform a deep analysis to summarize and restructure your content into the required format.
+3.  **Review and Export:**
+    * The formatted paper will appear in the preview area.
+    * Click **Download (.pptx)** to get a complete set of presentation slides based on the generated paper.
+
+---
+
+## ⚠️ Important Notes
+
+* **Review is Crucial:** Always review the AI-generated paper and slides for accuracy, context, and flow before submission or presentation.
+* **Internet Required:** A stable internet connection is necessary for the AI processing features.
+
+---
+
+## 🏛️ Copyright
+
+&copy; 2025 CAIRO UTM. All Rights Reserved.
+            `;
+            
+            // --- AI API Call Helper ---
+            async function callGeminiAPI(prompt) {
+                const payload = { contents: [{ parts: [{ text: prompt }] }] };
+                const apiKey = "AIzaSyBwdwbYP8iRcfkZTNzJ8pewQxh255XMlr0";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error(`API error! status: ${response.status}`);
+                
+                const result = await response.json();
+                if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    return result.candidates[0].content.parts[0].text;
+                } else {
+                    throw new Error('Unexpected AI response structure.');
+                }
+            }
+
+            // --- AI Metadata Extraction ---
+            async function extractAndSetMetadataFromAI(textContent) {
+                const briefText = textContent.substring(0, 2500);
+                const prompt = `
+From the following text, extract the document title, a comma-separated list of all authors, and the primary affiliation. Respond ONLY with a valid JSON object with keys "title", "authors", and "affiliation".
+Example: {"title": "The Title", "authors": "John Doe, Jane Smith", "affiliation": "University of Science"}
+
+Text:
+${briefText}
+`;
+                try {
+                    const responseText = await callGeminiAPI(prompt);
+                    const cleanedText = responseText.replace(/```json\n?|\n?```/g, '').trim();
+                    const data = JSON.parse(cleanedText);
+                    
+                    if (data.title) docTitleInput.value = data.title;
+                    const authorAndAffiliation = [data.authors, data.affiliation].filter(Boolean).join(', ');
+                    if (authorAndAffiliation) docAuthorsInput.value = authorAndAffiliation;
+                    
+                    showMessage(`File "${fileUploadInput.files[0].name}" loaded and metadata extracted.`, 'info');
+                } catch (error) {
+                    console.error('Metadata extraction error:', error);
+                    showMessage('Could not automatically extract metadata. Please check the generated paper for accuracy.', 'error');
+                }
+            }
+
+
+            // --- File Upload Logic ---
+            fileUploadInput.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const extension = file.name.split('.').pop().toLowerCase();
+                const reader = new FileReader();
+
+                reader.onload = async (e) => {
+                    try {
+                        let textContent = '';
+                        showMessage(`Processing "${file.name}"...`, 'info');
+                        
+                        switch (extension) {
+                            case 'txt': case 'rtf':
+                                textContent = e.target.result;
+                                break;
+                            case 'doc': case 'docx':
+                                const docxResult = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+                                textContent = docxResult.value;
+                                break;
+                            case 'pdf':
+                                const pdf = await pdfjsLib.getDocument({ data: e.target.result }).promise;
+                                let pdfText = '';
+                                for (let i = 1; i <= pdf.numPages; i++) {
+                                    const page = await pdf.getPage(i);
+                                    const textContentPage = await page.getTextContent();
+                                    pdfText += textContentPage.items.map(item => item.str).join(' ') + '\n'; 
+                                }
+                                textContent = pdfText;
+                                break;
+                            default:
+                                throw new Error('Unsupported file type');
+                        }
+                        
+                        sourceContentInput.value = textContent;
+                        await extractAndSetMetadataFromAI(textContent);
+
+                    } catch (error) {
+                        console.error("Error processing file:", error);
+                        showMessage(`Error processing "${file.name}". It may be corrupted or unsupported.`, 'error');
+                        fileUploadInput.value = '';
+                    }
+                };
+
+                reader.onerror = () => showMessage('Error reading the file.', 'error');
+
+                if (['txt', 'rtf'].includes(extension)) {
+                    reader.readAsText(file);
+                } else if (['docx', 'doc', 'pdf'].includes(extension)) {
+                    reader.readAsArrayBuffer(file);
+                } else {
+                    showMessage('Unsupported file type. Please use .txt, .docx, or .pdf.', 'error');
+                    fileUploadInput.value = '';
+                }
+            });
+
+
+            // --- Main Formatting and Summarization Logic ---
+            const formatDocumentWithAI = async () => {
+                const rawText = sourceContentInput.value.trim();
+                const title = docTitleInput.value.trim();
+                const authors = docAuthorsInput.value.trim();
+
+                if (!rawText) {
+                    showMessage('Please load a document or paste content before formatting.');
+                    return;
+                }
+                 if (!title || !authors) {
+                    showMessage('Title and Author could not be extracted. Formatting will proceed, but please verify the output.');
+                }
+
+                showMessage('Summarizing and formatting paper... Please wait.', 'info');
+                loadingSpinner.classList.remove('hidden');
+                formatBtn.disabled = true;
+                formattedOutputDiv.innerHTML = '<p class="text-center italic">Processing...</p>';
+
+                const prompt = `
+You are an expert academic editor, tasked with converting a raw document into a formal **conference proceeding paper**. Your absolute priority is to **aggressively summarize** the content into a **4-6 page paper** that **strictly adheres to the SPLNPROC 1703 template**. The final output must be professional, concise, and written in paragraph form.
+
+**CRITICAL INSTRUCTIONS (DO NOT DEVIATE):**
+1.  **MANDATORY STRUCTURE:** The final paper MUST contain all the following sections in this exact order:
+    * Title, Author, Affiliation
+    * Abstract
+    * Keywords
+    * 1.0 INTRODUCTION
+    * 2.0 LITERATURE REVIEW
+    * 3.0 METHODOLOGY
+    * 4.0 RESULT & DISCUSSION
+    * 5.0 CONCLUSION
+    * ACKNOWLEDGEMENT
+    * REFERENCES
+    If the source text lacks a specific section (e.g., "Acknowledgement"), you must generate a brief, appropriate placeholder section.
+
+2.  **STRICT TEMPLATE FORMATTING (SPLNPROC 1703):**
+    * **Title:** ALL CAPS, bold, centered.
+    * **Author(s) & Affiliation:** Centered below the title.
+    * **Abstract & Keywords:** Titled "**Abstract**" and "**Keywords**". The abstract's text MUST be *italicised*.
+    * **Main Headings:** Use **DECIMAL NUMBERING** (e.g., **1.0 INTRODUCTION**), all UPPERCASE, and bold.
+    * **Sub-headings:** Use one decimal point (e.g., **3.1 System Design**), in Title Case and bold.
+    * **Acknowledgement & References:** These two final headings MUST NOT have numbers.
+
+3.  **WRITING STYLE:**
+    * **Use PARAGRAPHS:** Do NOT use bullet points or excessive numbering in the main body. Write in well-structured, formal paragraphs.
+    * **CONCISE & DIRECT:** Adopt a direct writing style suitable for a conference paper. Avoid the long, descriptive style of a thesis.
+
+4.  **LOGICAL FIGURE PLACEMENT:**
+    * Analyze the content and insert figure placeholders like **"<INSERT FIGURE [NUMBER] HERE: A brief, relevant description>"** within the most appropriate sections (e.g., inside '4.0 RESULT & DISCUSSION' or '3.0 METHODOLOGY').
+    * **DO NOT** place figure placeholders in the REFERENCES section.
+
+5.  **OUTPUT:** Generate the entire paper in Markdown using UK English.
+
+**Document Details:**
+* **Title:** ${title}
+* **Author(s)/Affiliation:** ${authors}
+
+**Raw Text to Process:**
+${rawText}
+`;
+
+                try {
+                    aiGeneratedMarkdown = await callGeminiAPI(prompt);
+                    formattedOutputDiv.innerHTML = marked.parse(aiGeneratedMarkdown);
+                    showMessage('Paper summarized and formatted successfully!', 'info');
+                    setupActionButtons(true);
+                } catch (error) {
+                    console.error('Main Formatting Error:', error);
+                    formattedOutputDiv.innerHTML = 'Failed to process the paper. Please try again.';
+                    showMessage('Error: Could not process the paper via AI.', 'error');
+                } finally {
+                    loadingSpinner.classList.add('hidden');
+                    formatBtn.disabled = false;
+                }
+            };
+            
+            formatBtn.addEventListener('click', formatDocumentWithAI);
+
+            // --- PowerPoint Generation Logic (REBUILT FOR ACCURACY) ---
+            
+            
+            
+
+            // --- UTILITY HELPER FUNCTION ---
+            function toProperCase(str) {
+                return str.replace(/\w\S*/g, function(txt){return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();});
+            };
+
+            // --- Utility and Action Button Functions ---
+            function setupActionButtons(enabled) {
+                [copyBtn, downloadDocBtn, downloadRtfBtn].forEach(btn => btn.disabled = !enabled);
+            }
+
+            function getWordFriendlyHtml(sourceElement) {
+                const tempDiv = sourceElement.cloneNode(true);
+                tempDiv.querySelectorAll('p, li, h1, h2, h3').forEach(el => {
+                    el.style.margin = "0";
+                    el.style.padding = "0";
+                    if (el.tagName !== 'LI') {
+                       el.style.marginBottom = '12pt';
+                    }
+                });
+                return tempDiv.innerHTML;
+            }
+            
+            function copyHtmlToClipboard(elementId) {
+                const sourceElement = document.getElementById(elementId);
+                if (!sourceElement || sourceElement.innerHTML.trim() === '' || sourceElement.innerHTML.includes('Processing...')) {
+                    showMessage('There is no formatted content to copy.');
+                    return;
+                }
+
+                document.addEventListener('copy', (ev) => {
+                    ev.preventDefault();
+                    const wordFriendlyHtml = getWordFriendlyHtml(sourceElement);
+                    ev.clipboardData.setData('text/html', wordFriendlyHtml);
+                    ev.clipboardData.setData('text/plain', sourceElement.innerText);
+                }, { once: true });
+
+                document.execCommand('copy');
+                showMessage('Formatted text copied to clipboard (optimized for Word)!', 'info');
+            }
+            
+            copyBtn.addEventListener('click', () => copyHtmlToClipboard('formattedOutput'));
+
+            function downloadAs(format) {
+                if (!aiGeneratedMarkdown.trim()) {
+                    showMessage('There is no formatted content to download.');
+                    return;
+                }
+                const title = docTitleInput.value.trim() || "Formatted_Paper";
+                const date = new Date().toISOString().slice(0, 10);
+                const fileName = `${title.replace(/[^a-zA-Z0-9]/g, '_')}_${date}`;
+                
+                let blob;
+                const contentHtml = getWordFriendlyHtml(formattedOutputDiv);
+
+                if (format === 'doc') {
+                    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title></head><body>${contentHtml}</body></html>`;
+                    blob = new Blob([html], { type: 'application/msword;charset=utf-8' });
+                } else if (format === 'rtf') {
+                    const rtfContent = convertHtmlToRtf(contentHtml);
+                    blob = new Blob([rtfContent], { type: 'application/rtf;charset=utf-8' });
+                }
+
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `${fileName}.${format}`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                showMessage(`Paper successfully downloaded as "${fileName}.${format}".`, 'info');
+            }
+
+            downloadDocBtn.addEventListener('click', () => downloadAs('doc'));
+            downloadRtfBtn.addEventListener('click', () => downloadAs('rtf'));
+            
+            function convertHtmlToRtf(html) {
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = html;
+                let rtf = '{\\rtf1\\ansi\\deff0\\fs24\n{\\fonttbl{\\f0 Arial;}}\n';
+                
+                function processNode(node) {
+                    let text = '';
+                    node.childNodes.forEach(child => {
+                        if (child.nodeType === 3) text += escapeRtf(child.textContent); // Text node
+                        else if (child.nodeType === 1) { // Element node
+                            let prefix = '', suffix = '';
+                            switch(child.tagName.toLowerCase()) {
+                                case 'h1': prefix = '{\\pard\\qc\\b\\fs48 '; suffix = '\\par\\par}'; break;
+                                case 'h2': prefix = '{\\pard\\b\\fs36 '; suffix = '\\par\\par}'; break;
+                                case 'h3': prefix = '{\\pard\\b\\fs28 '; suffix = '\\par\\par}'; break;
+                                case 'p': prefix = '{\\pard '; suffix = '\\par}'; break;
+                                case 'b': case 'strong': prefix = '{\\b '; suffix = '}'; break;
+                                case 'i': case 'em': prefix = '{\\i '; suffix = '}'; break;
+                                case 'ul': prefix = '{\\pard'; suffix = '\\par}'; break;
+                                case 'ol': prefix = '{\\pard'; suffix = '\\par}'; break;
+                                case 'li': prefix = '{\\pard\\fi360\\bullet\\tab '; suffix = '\\par}';break;
+                            }
+                            text += prefix + processNode(child) + suffix;
+                        }
+                    });
+                    return text;
+                }
+                rtf += processNode(tempDiv);
+                rtf += '}';
+                return rtf;
+            }
+            
+            function escapeRtf(text) {
+                return text.replace(/\\/g, '\\\\').replace(/{/g, '\\{').replace(/}/g, '\\}').replace(/\n/g, '\\par\n');
+            }
+
+            function showMessage(msg, type = 'info') {
+                messageBox.textContent = msg;
+                messageBox.classList.remove('hidden', 'text-red-600', 'text-blue-600');
+                messageBox.classList.add(type === 'error' ? 'text-red-600' : 'text-blue-600');
+                if (!msg) messageBox.classList.add('hidden');
+            }
+
+            // --- User Manual Modal Logic ---
+            userManualBtn.addEventListener('click', () => {
+                userManualContent.innerHTML = marked.parse(readmeContentMarkdown);
+                userManualModal.classList.remove('hidden');
+            });
+            closeModalBtn.addEventListener('click', () => userManualModal.classList.add('hidden'));
+            userManualModal.addEventListener('click', (event) => {
+                if (event.target === userManualModal) userManualModal.classList.add('hidden');
+            });
+        };
+    </script>
+</body>
+</html>
+
+
